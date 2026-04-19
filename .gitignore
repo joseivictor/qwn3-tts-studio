@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+*.log
+audio_output/
+*.wav
+*.mp3
+*.flac
+tts_history.json
+tts_projects/
