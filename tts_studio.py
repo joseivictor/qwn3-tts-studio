@@ -45,6 +45,26 @@ try:
 except ImportError:
     PYDUB_OK = False
 
+try:
+    import pyloudnorm as pyln; PYLN_OK = True
+except ImportError:
+    PYLN_OK = False
+
+try:
+    import resampy; RESAMPY_OK = True
+except ImportError:
+    RESAMPY_OK = False
+
+try:
+    import noisereduce as nr; NR_OK = True
+except ImportError:
+    NR_OK = False
+
+try:
+    from faster_whisper import WhisperModel; WHISPER_OK = True
+except ImportError:
+    WHISPER_OK = False
+
 # ── Engine registry ───────────────────────────────────────────────────────────
 _engines     = {}
 _engine_lock = threading.Lock()
@@ -76,8 +96,55 @@ def _load_chatterbox():
             _engines["chatterbox"] = ChatterboxTTS.from_pretrained(device=DEVICE)
     return _engines["chatterbox"]
 
-# Preload Kokoro in background (fastest, most used)
-threading.Thread(target=_load_kokoro, daemon=True).start()
+def _load_xtts():
+    with _engine_lock:
+        if "xtts" not in _engines:
+            from TTS.api import TTS
+            _engines["xtts"] = TTS("tts_models/multilingual/multi-dataset/xtts_v2",
+                                   gpu=CUDA)
+    return _engines["xtts"]
+
+def _load_df():
+    with _engine_lock:
+        if "df" not in _engines:
+            from df.enhance import init_df
+            model, df_state, _ = init_df()
+            _engines["df"] = (model, df_state)
+    return _engines["df"]
+
+def _load_resemble():
+    with _engine_lock:
+        if "resemble" not in _engines:
+            import torch
+            from resemble_enhance.enhancer.inference import load_enhancer
+            _engines["resemble"] = load_enhancer(torch.device(DEVICE))
+    return _engines["resemble"]
+
+_whisper_model = None
+_whisper_lock  = threading.Lock()
+
+def transcribe_audio(path: str) -> str:
+    global _whisper_model
+    if not WHISPER_OK: return ""
+    try:
+        with _whisper_lock:
+            if _whisper_model is None:
+                _whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
+        segs, _ = _whisper_model.transcribe(path, beam_size=5)
+        return " ".join(s.text for s in segs).strip()
+    except Exception:
+        return ""
+
+XTTS_SPEAKERS = [
+    "Ana Florence","Claribel Dervla","Daisy Studious","Gracie Wise",
+    "Tammie Ema","Alison Dietlinde","Nova Hogarth","Damien Black",
+    "Aaron Dreschner","Craig Gutsy","Baldur Sanjin","Viktor Eka",
+]
+XTTS_LANGS = ["pt","en","es","fr","de","it","pl","tr","ru","nl","cs","ar","zh-cn","ko","ja","hi"]
+
+# Preload Chatterbox (best cloning) + Kokoro (fastest) in background
+threading.Thread(target=_load_chatterbox, daemon=True).start()
+threading.Thread(target=_load_kokoro,     daemon=True).start()
 
 # ── Kokoro voices ─────────────────────────────────────────────────────────────
 KOKORO_VOICES = {
@@ -358,24 +425,124 @@ def fx_cost_vs_elevenlabs(chars):
     return {"chars": chars, "elevenlabs_usd": eleven, "ours_usd": 0.0,
             "saved_usd": eleven, "saved_pct": 100}
 
+# ── Broadcast / Professional Mastering ───────────────────────────────────────
+def fx_lufs_normalize(w: np.ndarray, sr: int, target: float = -14.0) -> np.ndarray:
+    if not PYLN_OK: return fx_normalize(w, target + 3)
+    try:
+        meter   = pyln.Meter(sr)
+        w2      = w.reshape(-1, 1) if w.ndim == 1 else w
+        lufs    = meter.integrated_loudness(w2.astype(float))
+        if not np.isfinite(lufs): return w
+        return pyln.normalize.loudness(w2, lufs, target).squeeze().astype(np.float32)
+    except Exception:
+        return fx_normalize(w)
+
+def fx_air_eq(w: np.ndarray, sr: int, gain_db: float = 3.0, freq: int = 12000) -> np.ndarray:
+    from scipy.signal import butter, sosfilt
+    fc = min(freq, sr // 2 - 1)
+    sos = butter(2, fc, btype="high", fs=sr, output="sos")
+    hi  = sosfilt(sos, w.astype(np.float32))
+    return np.clip(w + hi * (10 ** (gain_db / 20) - 1), -1.0, 1.0)
+
+def fx_multiband_compress(w: np.ndarray, sr: int) -> np.ndarray:
+    from scipy.signal import butter, sosfilt
+    def band(lo, hi, t):
+        if lo is None: sos = butter(2, hi, btype="low",  fs=sr, output="sos")
+        elif hi is None: sos = butter(2, lo, btype="high", fs=sr, output="sos")
+        else:            sos = butter(2, [lo, hi], btype="band", fs=sr, output="sos")
+        x = sosfilt(sos, w.astype(np.float32))
+        m = np.abs(x) > t
+        x[m] = np.sign(x[m]) * (t + (np.abs(x[m]) - t) / 3.5)
+        return x
+    return np.clip(band(None, 300, 0.55) + band(300, 4000, 0.65) + band(4000, None, 0.75), -1, 1).astype(np.float32)
+
+def fx_true_peak_limit(w: np.ndarray, ceiling: float = 0.985) -> np.ndarray:
+    peak = np.max(np.abs(w))
+    return w / peak * ceiling if peak > ceiling else w
+
+def fx_hq_resample(w: np.ndarray, sr: int, target: int = 48000) -> tuple:
+    if sr == target: return w, sr
+    if RESAMPY_OK:
+        return resampy.resample(w.astype(np.float32), sr, target), target
+    from scipy.signal import resample_poly
+    from math import gcd; g = gcd(sr, target)
+    return resample_poly(w, target // g, sr // g).astype(np.float32), target
+
+def fx_noisereduce(w: np.ndarray, sr: int) -> np.ndarray:
+    if NR_OK:
+        try: return nr.reduce_noise(y=w, sr=sr, stationary=False).astype(np.float32)
+        except Exception: pass
+    return fx_denoise(w, sr)
+
+def fx_neural_enhance(w: np.ndarray, sr: int) -> tuple:
+    try:
+        import torch
+        from resemble_enhance.enhancer.inference import enhance as re_enh
+        tmp = tempfile.mktemp(suffix=".wav")
+        sf.write(tmp, w.astype(np.float32), sr)
+        enh, new_sr = re_enh(tmp, torch.device(DEVICE))
+        os.unlink(tmp)
+        return enh.cpu().numpy().astype(np.float32), int(new_sr)
+    except Exception:
+        return w, sr
+
+def fx_deep_denoise(w: np.ndarray, sr: int) -> np.ndarray:
+    try:
+        import torch
+        from df.enhance import enhance as df_enh, init_df
+        model, df_state, _ = init_df()
+        audio = torch.from_numpy(w.reshape(1, -1)).float()
+        return df_enh(model, df_state, audio).numpy().squeeze().astype(np.float32)
+    except Exception:
+        return fx_noisereduce(w, sr)
+
+# Quality presets
+QUALITY_PRESETS = {
+    "Rápido":       {"normalize": True},
+    "Padrão":       {"normalize": True, "trim": True, "compress": True},
+    "Profissional": {"normalize": True, "trim": True, "compress": True,
+                     "lufs": True, "air_eq": True, "fade": True},
+    "Broadcast":    {"normalize": True, "trim": True, "multiband": True,
+                     "lufs": True, "air_eq": True, "limiter": True, "hq_sr": True},
+    "Cinema":       {"normalize": True, "trim": True, "compress": True,
+                     "lufs": True, "air_eq": True, "reverb": True, "eq": "Cinema"},
+    "Podcast":      {"normalize": True, "trim": True, "compress": True,
+                     "lufs": True, "eq": "Podcast", "fade": True},
+}
+
 def fx_pipeline(w, sr, opts):
-    if opts.get("normalize"):       w = fx_normalize(w)
-    if opts.get("trim"):            w = fx_trim(w, sr)
+    # apply preset if set
+    preset_name = opts.get("preset", "")
+    if preset_name and preset_name in QUALITY_PRESETS:
+        opts = {**QUALITY_PRESETS[preset_name], **opts}
+
+    if opts.get("normalize"):           w = fx_normalize(w)
+    if opts.get("trim"):                w = fx_trim(w, sr)
     speed = float(opts.get("speed", 1.0))
-    if abs(speed - 1.0) > 0.01:    w, sr = fx_speed(w, sr, speed)
+    if abs(speed - 1.0) > 0.01:        w, sr = fx_speed(w, sr, speed)
     pitch = float(opts.get("pitch", 0.0))
-    if abs(pitch) > 0.1:           w = fx_pitch(w, sr, pitch)
-    if opts.get("reverb"):          w = fx_reverb(w, sr, float(opts.get("reverb_amount", 0.3)))
-    if opts.get("echo"):            w = fx_echo(w, sr)
-    if opts.get("denoise"):         w = fx_denoise(w, sr)
-    if opts.get("compress"):        w = fx_compress(w)
+    if abs(pitch) > 0.1:               w = fx_pitch(w, sr, pitch)
+    if opts.get("deep_denoise"):        w = fx_deep_denoise(w, sr)
+    elif opts.get("noisereduce"):       w = fx_noisereduce(w, sr)
+    elif opts.get("denoise"):           w = fx_denoise(w, sr)
+    if opts.get("multiband"):           w = fx_multiband_compress(w, sr)
+    elif opts.get("compress"):          w = fx_compress(w)
     eq = opts.get("eq", "Neutro")
     if eq and eq != "Neutro":
         p = EQ_PRESETS.get(eq) or {}
         if p: w = fx_eq(w, sr, p.get("bass",0), p.get("mid",0), p.get("treble",0))
-    if opts.get("fade"):            w = fx_fade(w, sr)
-    if opts.get("padding"):         w = fx_padding(w, sr)
-    return fx_normalize(w), sr
+    if opts.get("reverb"):              w = fx_reverb(w, sr, float(opts.get("reverb_amount", 0.3)))
+    if opts.get("echo"):                w = fx_echo(w, sr)
+    if opts.get("air_eq"):              w = fx_air_eq(w, sr)
+    if opts.get("lufs"):                w = fx_lufs_normalize(w, sr, float(opts.get("lufs_target", -14.0)))
+    if opts.get("fade"):                w = fx_fade(w, sr)
+    if opts.get("padding"):             w = fx_padding(w, sr)
+    if opts.get("limiter"):             w = fx_true_peak_limit(w)
+    else:                               w = fx_normalize(w)
+    # Post-pipeline
+    if opts.get("neural_enhance"):      w, sr = fx_neural_enhance(w, sr)
+    if opts.get("hq_sr"):               w, sr = fx_hq_resample(w, sr, 48000)
+    return w, sr
 
 # ── Engine: Kokoro ────────────────────────────────────────────────────────────
 def gen_kokoro(text: str, voice: str, speed: float = 1.0, opts: dict = None) -> tuple:
@@ -444,6 +611,29 @@ def gen_edge(text: str, voice: str, rate: str = "+0%", pitch: str = "+0Hz", opts
     w, sr = fx_pipeline(w, sr, opts)
     return w, int(sr)
 
+# ── Engine: XTTS v2 ──────────────────────────────────────────────────────────
+def gen_xtts(text: str, language: str = "pt", speaker: str = "Ana Florence",
+             speaker_wav: str = None, opts: dict = None) -> tuple:
+    opts  = opts or {}
+    model = _load_xtts()
+    text  = fx_apply_pron(fx_clean_text(text))
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+        tmp = f.name
+    try:
+        if speaker_wav and Path(speaker_wav).exists():
+            model.tts_to_file(text=text, speaker_wav=speaker_wav,
+                              language=language, file_path=tmp)
+        else:
+            model.tts_to_file(text=text, speaker=speaker,
+                              language=language, file_path=tmp)
+        w, sr = sf.read(tmp)
+        w = w.astype(np.float32)
+        if w.ndim > 1: w = w.mean(-1)
+        w, sr = fx_pipeline(w, int(sr), opts)
+        return w, int(sr)
+    finally:
+        if os.path.exists(tmp): os.unlink(tmp)
+
 # ── Master generate ───────────────────────────────────────────────────────────
 def generate(engine: str, text: str, params: dict, opts: dict) -> dict:
     t0 = time.time()
@@ -475,6 +665,13 @@ def generate(engine: str, text: str, params: dict, opts: dict) -> dict:
         pitch = params.get("pitch", "+0Hz")
         w, sr = gen_edge(text, voice, rate, pitch, opts)
         used_voice = voice
+
+    elif engine == "xtts":
+        lang    = params.get("language", "pt")
+        speaker = params.get("speaker", "Ana Florence")
+        ref     = params.get("ref_audio")
+        w, sr   = gen_xtts(text, lang, speaker, ref, opts)
+        used_voice = f"xtts-{speaker.split()[0].lower()}"
 
     else:
         raise ValueError(f"Engine desconhecido: {engine}")
@@ -535,10 +732,21 @@ async def root(): return _html()
 
 @app.get("/api/info")
 async def info():
-    return {"gpu": GPU_NAME, "vram": GPU_VRAM, "version": "5.0",
-            "engines_loaded": list(_engines.keys()),
-            "engines_available": ["kokoro","f5","chatterbox","edge"],
-            "saved_voices": len(_saved_voices)}
+    return {
+        "gpu": GPU_NAME, "vram": GPU_VRAM, "version": "6.0",
+        "engines_loaded": list(_engines.keys()),
+        "engines_available": ["kokoro","f5","chatterbox","edge","xtts"],
+        "capabilities": {
+            "whisper": WHISPER_OK,
+            "pyloudnorm": PYLN_OK,
+            "resampy": RESAMPY_OK,
+            "noisereduce": NR_OK,
+            "neural_enhance": "resemble" in _engines,
+            "deep_denoise": "df" in _engines,
+        },
+        "quality_presets": list(QUALITY_PRESETS.keys()),
+        "saved_voices": len(_saved_voices),
+    }
 
 @app.post("/api/generate")
 async def api_generate(request: Request):
@@ -741,6 +949,55 @@ async def text_stats(request: Request):
 
 @app.get("/api/cost")
 async def cost(chars: int = 1000): return fx_cost_vs_elevenlabs(chars)
+
+@app.get("/api/quality_presets")
+async def quality_presets(): return list(QUALITY_PRESETS.keys())
+
+@app.get("/api/xtts/speakers")
+async def xtts_speakers(): return XTTS_SPEAKERS
+
+@app.get("/api/xtts/langs")
+async def xtts_langs(): return XTTS_LANGS
+
+@app.post("/api/transcribe")
+async def api_transcribe(audio: UploadFile = File(...)):
+    if not WHISPER_OK:
+        return JSONResponse({"error": "faster-whisper não instalado"}, status_code=501)
+    tmp = None
+    try:
+        data = await audio.read()
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            f.write(data); tmp = f.name
+        text = await asyncio.to_thread(transcribe_audio, tmp)
+        return {"text": text, "ok": bool(text)}
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+    finally:
+        if tmp and os.path.exists(tmp): os.unlink(tmp)
+
+@app.post("/api/enhance")
+async def api_enhance(request: Request):
+    req      = await _body(request)
+    filename = req.get("filename", "")
+    path     = OUT_DIR / filename
+    if not path.exists():
+        return JSONResponse({"error": "Arquivo não encontrado"}, status_code=404)
+    try:
+        w, sr = sf.read(str(path))
+        w = w.astype(np.float32)
+        if w.ndim > 1: w = w.mean(-1)
+        opts = req.get("opts", {"lufs": True, "air_eq": True, "noisereduce": True, "limiter": True})
+        w, sr = fx_pipeline(w, sr, opts)
+        enh_path = _save_wav(w, sr, "enhanced")
+        return JSONResponse({
+            "audio_b64": _wav_to_b64(w, sr),
+            "filename": enh_path.name,
+            "stats": _audio_stats(w, sr),
+            "waveform": fx_waveform_data(w),
+        })
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 # This file is merged into tts_studio.py — do not run directly
 def _html():  # noqa: C901
@@ -1128,26 +1385,35 @@ canvas#wv{width:100%;height:64px;border-radius:10px;background:rgba(255,255,255,
       <div class="card">
         <div class="ct">Engine de Voz</div>
         <div class="eng-grid">
-          <div class="eng-tile active-kok" data-eng="kokoro" onclick="setEng(this,'kokoro')">
+          <div class="eng-tile active-cha eng-flag" data-eng="chatterbox" onclick="setEng(this,'chatterbox')"
+            style="grid-column:1/-1;background:linear-gradient(135deg,rgba(74,222,128,0.12),rgba(34,211,238,0.08));border-color:rgba(74,222,128,0.45);box-shadow:0 0 24px rgba(74,222,128,0.18)">
+            <div class="eng-hd">
+              <div class="eng-dot" style="background:var(--cha)"></div>
+              <span>Chatterbox</span>
+              <span style="margin-left:auto;font-size:9px;padding:2px 8px;background:rgba(74,222,128,0.2);border:1px solid rgba(74,222,128,0.4);border-radius:20px;color:var(--em);font-weight:700;letter-spacing:0.5px">⭐ BATE ELEVENLABS</span>
+            </div>
+            <div class="eng-sub">Resemble AI · SOTA cloning · Controle emocional · TTS Arena #1</div>
+          </div>
+          <div class="eng-tile" data-eng="kokoro" onclick="setEng(this,'kokoro')">
             <div class="eng-hd"><div class="eng-dot" style="background:var(--kok)"></div>Kokoro</div>
-            <div class="eng-sub">Qualidade máxima · Local</div>
+            <div class="eng-sub">Rápido · PT-BR · Local</div>
+          </div>
+          <div class="eng-tile" data-eng="xtts" onclick="setEng(this,'xtts')">
+            <div class="eng-hd"><div class="eng-dot" style="background:#f472b6"></div>XTTS v2</div>
+            <div class="eng-sub">17 idiomas · Coqui</div>
           </div>
           <div class="eng-tile" data-eng="f5" onclick="setEng(this,'f5')">
             <div class="eng-hd"><div class="eng-dot" style="background:var(--f5c)"></div>F5-TTS</div>
-            <div class="eng-sub">Clone zero-shot</div>
-          </div>
-          <div class="eng-tile" data-eng="chatterbox" onclick="setEng(this,'chatterbox')">
-            <div class="eng-hd"><div class="eng-dot" style="background:var(--cha)"></div>Chatterbox</div>
-            <div class="eng-sub">Controle emocional</div>
+            <div class="eng-sub">Zero-shot rápido</div>
           </div>
           <div class="eng-tile" data-eng="edge" onclick="setEng(this,'edge')">
             <div class="eng-hd"><div class="eng-dot" style="background:var(--edg)"></div>Edge TTS</div>
-            <div class="eng-sub">322 vozes Microsoft</div>
+            <div class="eng-sub">322 vozes · Offline</div>
           </div>
         </div>
 
         <!-- Kokoro params -->
-        <div id="ep-kokoro" class="ep act">
+        <div id="ep-kokoro" class="ep">
           <div class="ct" style="margin-bottom:10px">Voz Kokoro</div>
           <div class="vg" id="kvg"></div>
           <label>Velocidade</label>
@@ -1172,18 +1438,25 @@ canvas#wv{width:100%;height:64px;border-radius:10px;background:rgba(255,255,255,
           <textarea id="f5-rt" rows="2" placeholder="O que o áudio diz..."></textarea>
         </div>
 
-        <!-- Chatterbox params -->
-        <div id="ep-chatterbox" class="ep">
+        <!-- Chatterbox params — DEFAULT (best cloning) -->
+        <div id="ep-chatterbox" class="ep act">
+          <div style="font-size:11px;color:var(--em);margin-bottom:10px;padding:10px;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);border-radius:9px;line-height:1.5">
+            <b>⭐ Resemble AI Chatterbox</b> — Modelo #1 no TTS Arena (vence ElevenLabs em testes cegos).
+            MIT · Watermark PerTh · Controle emocional único.
+          </div>
           <div class="upzone" id="cb-uz">
             <input type="file" id="cb-ref" accept="audio/*" onchange="onUp(this,'cb-uz','cb-lbl')">
             <span class="up-ico">🎭</span>
-            <p id="cb-lbl">Referência de voz (opcional)</p>
+            <p id="cb-lbl">Referência de voz (opcional · 5–10s basta)</p>
           </div>
-          <label>Intensidade emocional</label>
+          <label>Exageração Emocional <span style="color:var(--t3);font-weight:400">(único no mercado)</span></label>
           <div class="srow">
             <input type="range" id="cb-ex" min="0" max="1" step="0.05" value="0.5"
-              oninput="document.getElementById('cb-ev').textContent=this.value">
+              oninput="document.getElementById('cb-ev').textContent=this.value;updateExagLabel(this.value)">
             <span class="sv" id="cb-ev">0.5</span>
+          </div>
+          <div id="cb-ex-desc" style="font-size:10px;color:var(--t3);margin-top:3px">
+            0.5 = neutro · 0.8+ = dramático · &lt;0.3 = monótono
           </div>
         </div>
 
@@ -1196,6 +1469,36 @@ canvas#wv{width:100%;height:64px;border-radius:10px;background:rgba(255,255,255,
           <label>Tom (pitch)</label>
           <select id="edge-p"></select>
         </div>
+
+        <!-- XTTS v2 panel -->
+        <div id="ep-xtts" class="ep">
+          <div style="font-size:11px;color:var(--t2);margin-bottom:10px;padding:8px;background:rgba(244,114,182,0.08);border:1px solid rgba(244,114,182,0.2);border-radius:8px">
+            ⭐ XTTS v2 — melhor modelo open-source para clonagem multilingual
+          </div>
+          <label>Idioma</label>
+          <select id="xt-lang">
+            <option value="pt">Português BR</option>
+            <option value="en">English</option>
+            <option value="es">Español</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+            <option value="it">Italiano</option>
+            <option value="ja">Japanese</option>
+            <option value="ko">Korean</option>
+            <option value="zh-cn">Chinese</option>
+            <option value="ar">Arabic</option>
+          </select>
+          <label>Speaker (sem referência)</label>
+          <select id="xt-speaker"></select>
+          <label>Áudio de referência (opcional — clona essa voz)</label>
+          <div class="upzone" id="xt-uz">
+            <input type="file" id="xt-ref" accept="audio/*" onchange="onUp(this,'xt-uz','xt-lbl');autoTranscribe('xt-ref','xt-rt')">
+            <span class="up-ico">🎤</span>
+            <p id="xt-lbl">Áudio para clonar (5–30s ideal)</p>
+          </div>
+          <label>Transcrição <span id="xt-tr-spin" style="color:var(--t3)"></span></label>
+          <textarea id="xt-rt" rows="2" placeholder="Auto-transcrito por Whisper..."></textarea>
+        </div>
       </div>
 
       <!-- FX CARD -->
@@ -1207,6 +1510,17 @@ canvas#wv{width:100%;height:64px;border-radius:10px;background:rgba(255,255,255,
             oninput="document.getElementById('g-pv').textContent=this.value">
           <span class="sv" id="g-pv">0</span>
         </div>
+        <label>Preset de Qualidade</label>
+        <select id="g-preset" onchange="applyPreset(this.value)"
+          style="border-color:rgba(244,114,182,0.4);color:var(--t)">
+          <option value="">Manual</option>
+          <option value="Rápido">⚡ Rápido</option>
+          <option value="Padrão" selected>🎙 Padrão</option>
+          <option value="Profissional">🎚 Profissional</option>
+          <option value="Broadcast">📡 Broadcast (48kHz LUFS)</option>
+          <option value="Cinema">🎬 Cinema</option>
+          <option value="Podcast">🎙 Podcast</option>
+        </select>
         <label>EQ Preset</label>
         <select id="g-eq"></select>
         <div class="tog-grid" style="margin-top:12px">
@@ -1466,7 +1780,7 @@ const ER = __ER__;
 const EP = __EP__;
 
 // ── STATE ─────────────────────────────────────────────
-let curEng = 'kokoro';
+let curEng = 'chatterbox';
 let curKV  = 'af_heart';
 let curEV  = 'pt-BR-FranciscaNeural';
 let toggs  = {};
@@ -1533,6 +1847,16 @@ function buildEdge() {
   const ps = document.getElementById('edge-p');
   EP.forEach(p => { const o=document.createElement('option'); o.value=p; o.textContent=p; ps.appendChild(o); });
   ps.value = '+0Hz';
+}
+
+// ── XTTS SPEAKERS ─────────────────────────────────────
+async function buildXTTS() {
+  const sel = document.getElementById('xt-speaker');
+  if (!sel) return;
+  try {
+    const sp = await fetch('/api/xtts/speakers').then(r=>r.json());
+    sp.forEach(s => { const o=document.createElement('option'); o.value=s; o.textContent=s; sel.appendChild(o); });
+  } catch {}
 }
 
 // ── EQ SELECT ─────────────────────────────────────────
@@ -1667,11 +1991,22 @@ async function doGen() {
   } else if (curEng==='chatterbox') {
     const f = document.getElementById('cb-ref').files[0];
     return doCloneFrom('chatterbox', txt, f, '', parseFloat(document.getElementById('cb-ex').value));
+  } else if (curEng==='xtts') {
+    const f = document.getElementById('xt-ref').files[0];
+    if (f) {
+      return doCloneXTTS(txt, f, document.getElementById('xt-lang').value);
+    }
+    params = {
+      language: document.getElementById('xt-lang').value,
+      speaker:  document.getElementById('xt-speaker').value
+    };
   }
 
+  const presetName = document.getElementById('g-preset').value;
   const opts = Object.assign({}, toggs, {
     pitch: parseFloat(document.getElementById('g-pitch').value),
-    eq: document.getElementById('g-eq').value
+    eq: document.getElementById('g-eq').value,
+    preset: presetName
   });
 
   // show waveform loader
@@ -1696,6 +2031,66 @@ async function doGen() {
     toast('Erro: '+e.message, '✕', 5000);
   }
   btn.disabled = false;
+}
+
+// ── PRESET + TRANSCRIBE + XTTS HELPERS ───────────────
+function applyPreset(name) {
+  if (!name) return;
+  toast('Preset: '+name, '🎚');
+  // visual feedback — could toggle UI toggles to match preset, but backend handles actual application
+}
+
+function updateExagLabel(v) {
+  const el = document.getElementById('cb-ex-desc');
+  if (!el) return;
+  const f = parseFloat(v);
+  let txt = '';
+  if (f < 0.3) txt = f.toFixed(2)+' → monótono / calmo';
+  else if (f < 0.6) txt = f.toFixed(2)+' → natural (recomendado)';
+  else if (f < 0.85) txt = f.toFixed(2)+' → expressivo';
+  else txt = f.toFixed(2)+' → muito dramático';
+  el.textContent = txt;
+}
+
+async function autoTranscribe(inputId, targetId) {
+  const f = document.getElementById(inputId).files[0];
+  if (!f) return;
+  const spin = document.getElementById('xt-tr-spin');
+  if (spin) spin.innerHTML = '<span class="spin" style="display:inline-block;width:10px;height:10px;vertical-align:middle"></span> transcrevendo...';
+  const fd = new FormData();
+  fd.append('audio', f);
+  try {
+    const d = await (await fetch('/api/transcribe', {method:'POST', body:fd})).json();
+    if (d.ok && d.text) {
+      document.getElementById(targetId).value = d.text;
+      toast('Transcrito por Whisper','🧠');
+    }
+  } catch(e) { /* silent */ }
+  if (spin) spin.innerHTML = '';
+}
+
+async function doCloneXTTS(text, file, language) {
+  const fd = new FormData();
+  fd.append('text', text);
+  fd.append('engine', 'xtts');
+  fd.append('ref_text', document.getElementById('xt-rt').value || '');
+  fd.append('audio_ref', file);
+  const pc = document.getElementById('g-player');
+  pc.classList.add('show');
+  if (!wvCtx) initWV();
+  animWV([], true);
+  try {
+    const res = await fetch('/api/generate/clone', {method:'POST', body:fd});
+    const d = await res.json();
+    if (d.error) throw new Error(d.error);
+    renderResult(d);
+    setStatus('g-status','ok','✓ XTTS v2 clonado · '+d.stats.duration_s+'s');
+    toast('Voz clonada via XTTS v2!', '⭐');
+  } catch(e) {
+    setStatus('g-status','err', e.message);
+    toast('Erro: '+e.message, '✕', 5000);
+  }
+  document.getElementById('g-btn').disabled = false;
 }
 
 async function doCloneFrom(eng, text, file, rtext, exag=0.5) {
@@ -2066,6 +2461,8 @@ window.onload = () => {
   buildKVG();
   buildEdge();
   buildEQ();
+  buildXTTS();
+  updateExagLabel(0.5);
 
   // restore draft
   const draft = localStorage.getItem('qwn3_draft');
