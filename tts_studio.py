@@ -1041,20 +1041,73 @@ def _html():  # noqa: C901
   --edg:#fbbf24;
   --glow-ind:rgba(99,102,241,0.3);
   --glow-cyn:rgba(6,182,212,0.25);
+  --header-bg:rgba(8,8,18,0.8);
+  --sidebar-bg:rgba(8,8,18,0.6);
+  --card-bg:rgba(13,13,28,0.75);
+  --card-bg-strong:rgba(13,13,28,0.85);
+  --input-bg:rgba(255,255,255,0.04);
+  --input-bg-soft:rgba(255,255,255,0.03);
+  --surface-soft:rgba(255,255,255,0.03);
+  --surface-hover:rgba(255,255,255,0.06);
+  --orb1-color:rgba(99,102,241,0.13);
+  --orb2-color:rgba(6,182,212,0.10);
+  --orb3-color:rgba(139,92,246,0.08);
 }
-html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t)}
+/* ── LIGHT THEME ──────────────────────────────────────── */
+html[data-theme="light"]{
+  --bg:#f5f6fb;
+  --s1:#ffffff;
+  --s2:#f0f2f8;
+  --s3:#e5e8f0;
+  --s4:#d6dae5;
+  --bd:rgba(20,28,60,0.08);
+  --bd2:rgba(20,28,60,0.14);
+  --t:#0f172a;
+  --t2:#475569;
+  --t3:#94a3b8;
+  --ind:#4f46e5;
+  --ind2:#4338ca;
+  --vio:#7c3aed;
+  --cyn:#0891b2;
+  --em:#059669;
+  --ros:#e11d48;
+  --amb:#d97706;
+  --kok:#4f46e5;
+  --f5c:#0891b2;
+  --cha:#059669;
+  --edg:#d97706;
+  --header-bg:rgba(255,255,255,0.85);
+  --sidebar-bg:rgba(255,255,255,0.75);
+  --card-bg:rgba(255,255,255,0.80);
+  --card-bg-strong:rgba(255,255,255,0.95);
+  --input-bg:rgba(255,255,255,0.8);
+  --input-bg-soft:rgba(255,255,255,0.6);
+  --surface-soft:rgba(255,255,255,0.5);
+  --surface-hover:rgba(99,102,241,0.06);
+  --orb1-color:rgba(99,102,241,0.15);
+  --orb2-color:rgba(6,182,212,0.12);
+  --orb3-color:rgba(139,92,246,0.10);
+}
+html[data-theme="light"] body{background:linear-gradient(180deg,#f5f6fb,#eef1f9)}
+html[data-theme="light"] audio{filter:none}
+html[data-theme="light"] [data-tip]::before{background:rgba(15,23,42,0.95);color:#fff;border-color:rgba(15,23,42,0.3)}
+html[data-theme="light"] [data-tip]::after{border-top-color:rgba(15,23,42,0.95)}
+html[data-theme="light"] [data-tip-pos="right"]::after{border-top-color:transparent;border-right-color:rgba(15,23,42,0.95)}
+html[data-theme="light"] [data-tip-pos="left"]::after{border-top-color:transparent;border-left-color:rgba(15,23,42,0.95)}
+
+html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t);transition:background .3s ease,color .3s ease}
 
 /* ── BG ORBS ─────────────────────────────────────────── */
 .orbs{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
 .orb{position:absolute;border-radius:50%;filter:blur(90px)}
 .orb1{width:900px;height:900px;top:-350px;left:-250px;
-  background:radial-gradient(circle,rgba(99,102,241,0.13),transparent 65%);
+  background:radial-gradient(circle,var(--orb1-color),transparent 65%);
   animation:o1 24s ease-in-out infinite alternate}
 .orb2{width:650px;height:650px;bottom:-200px;right:-150px;
-  background:radial-gradient(circle,rgba(6,182,212,0.10),transparent 65%);
+  background:radial-gradient(circle,var(--orb2-color),transparent 65%);
   animation:o2 19s ease-in-out infinite alternate}
 .orb3{width:500px;height:500px;top:45%;left:45%;
-  background:radial-gradient(circle,rgba(139,92,246,0.08),transparent 65%);
+  background:radial-gradient(circle,var(--orb3-color),transparent 65%);
   animation:o3 28s ease-in-out infinite alternate}
 @keyframes o1{0%{transform:translate(0,0)}100%{transform:translate(70px,90px)}}
 @keyframes o2{0%{transform:translate(0,0)}100%{transform:translate(-60px,-55px)}}
@@ -1063,7 +1116,7 @@ html,body{height:100%;overflow:hidden;font-family:'Inter',system-ui,sans-serif;b
 /* ── LAYOUT ──────────────────────────────────────────── */
 .shell{position:relative;z-index:1;display:flex;flex-direction:column;height:100vh}
 header{height:58px;flex-shrink:0;display:flex;align-items:center;gap:16px;padding:0 20px;
-  background:rgba(8,8,18,0.8);backdrop-filter:blur(20px);
+  background:var(--header-bg);backdrop-filter:blur(20px);
   border-bottom:1px solid var(--bd)}
 .logo{display:flex;align-items:center;gap:10px;text-decoration:none}
 .logo-mark{width:34px;height:34px;background:linear-gradient(135deg,#6366f1,#22d3ee);
@@ -1073,14 +1126,20 @@ header{height:58px;flex-shrink:0;display:flex;align-items:center;gap:16px;paddin
 .logo-text{font-size:15px;font-weight:800;color:var(--t);letter-spacing:-0.3px}
 .logo-ver{font-size:10px;padding:2px 7px;background:rgba(99,102,241,0.15);
   border:1px solid rgba(99,102,241,0.3);border-radius:20px;color:var(--ind);font-weight:600}
-.hbadge{padding:4px 12px;background:rgba(255,255,255,0.04);border:1px solid var(--bd);
+.hbadge{padding:4px 12px;background:var(--input-bg);border:1px solid var(--bd);
   border-radius:20px;font-size:11px;color:var(--t2);white-space:nowrap}
 .hbadge.live{color:var(--em);border-color:rgba(74,222,128,0.3);background:rgba(74,222,128,0.06)}
 .hspacer{flex:1}
+.theme-btn{width:34px;height:34px;border:1px solid var(--bd);background:var(--input-bg);
+  color:var(--t2);border-radius:10px;cursor:pointer;display:flex;align-items:center;
+  justify-content:center;transition:all .2s;flex-shrink:0}
+.theme-btn:hover{color:var(--ind);border-color:var(--ind);transform:rotate(12deg)}
+.theme-btn svg{transition:transform .4s cubic-bezier(0.34,1.56,0.64,1)}
+.theme-btn:active svg{transform:scale(0.85)}
 .app{display:flex;flex:1;overflow:hidden}
 
 /* ── SIDEBAR ─────────────────────────────────────────── */
-nav.sidebar{width:224px;flex-shrink:0;background:rgba(8,8,18,0.6);
+nav.sidebar{width:224px;flex-shrink:0;background:var(--sidebar-bg);
   backdrop-filter:blur(20px);border-right:1px solid var(--bd);
   display:flex;flex-direction:column;overflow-y:auto;padding:12px 0}
 .nav-sec{padding:10px 16px 5px;font-size:9px;font-weight:700;letter-spacing:2px;
@@ -1110,7 +1169,7 @@ main{flex:1;overflow-y:auto;padding:22px 24px}
 @media(max-width:900px){.studio-grid{grid-template-columns:1fr}.g2,.g3,.g4{grid-template-columns:1fr 1fr}}
 
 /* ── CARDS ───────────────────────────────────────────── */
-.card{background:rgba(13,13,28,0.75);backdrop-filter:blur(16px);
+.card{background:var(--card-bg);backdrop-filter:blur(16px);
   border:1px solid var(--bd);border-radius:14px;padding:18px;
   transition:border-color .2s}
 .card:hover{border-color:var(--bd2)}
@@ -1154,13 +1213,13 @@ main{flex:1;overflow-y:auto;padding:22px 24px}
 /* ── FORM ELEMENTS ───────────────────────────────────── */
 label{font-size:11px;color:var(--t2);display:block;margin-bottom:5px;margin-top:12px;font-weight:500}
 label:first-child{margin-top:0}
-select,input[type=text],input[type=number]{width:100%;background:rgba(255,255,255,0.04);
+select,input[type=text],input[type=number]{width:100%;background:var(--input-bg);
   border:1px solid var(--bd);color:var(--t);padding:9px 12px;border-radius:9px;
-  font-size:12px;font-family:inherit;outline:none;transition:border .15s;appearance:none}
+  font-size:12px;font-family:inherit;outline:none;transition:border .15s,background .2s;appearance:none}
 select:focus,input:focus{border-color:var(--ind)}
-textarea{width:100%;background:rgba(255,255,255,0.03);border:1px solid var(--bd);
+textarea{width:100%;background:var(--input-bg-soft);border:1px solid var(--bd);
   color:var(--t);padding:14px;border-radius:11px;font-size:13px;font-family:inherit;
-  outline:none;resize:vertical;min-height:180px;line-height:1.7;transition:border .15s}
+  outline:none;resize:vertical;min-height:180px;line-height:1.7;transition:border .15s,background .2s}
 textarea:focus{border-color:rgba(99,102,241,0.5);background:rgba(255,255,255,0.04)}
 textarea::placeholder{color:var(--t3)}
 input[type=range]{width:100%;accent-color:var(--ind);cursor:pointer;height:4px;border-radius:4px;
@@ -1229,7 +1288,7 @@ input[type=range]{width:100%;accent-color:var(--ind);cursor:pointer;height:4px;b
 @keyframes tout{to{opacity:0;transform:translateX(40px)}}
 
 /* ── AUDIO PLAYER ────────────────────────────────────── */
-.player-card{background:rgba(13,13,28,0.85);border:1px solid var(--bd);
+.player-card{background:var(--card-bg-strong);border:1px solid var(--bd);
   border-radius:14px;padding:18px;margin-top:14px;display:none}
 .player-card.show{display:block;animation:pfade .25s ease}
 audio{width:100%;height:36px;border-radius:8px;margin-bottom:10px;outline:none;
@@ -1296,6 +1355,38 @@ canvas#wv{width:100%;height:64px;border-radius:10px;background:rgba(255,255,255,
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:4px}
 ::-webkit-scrollbar-track{background:transparent}
 
+/* ── TOOLTIP SYSTEM ─────────────────────────────────── */
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{
+  opacity:0;pointer-events:none;position:absolute;
+  transition:opacity .18s ease,transform .18s ease;
+  z-index:10000;transform:translateY(4px)}
+[data-tip]::before{
+  content:attr(data-tip);
+  bottom:calc(100% + 10px);left:50%;transform:translateX(-50%) translateY(4px);
+  background:rgba(12,12,24,0.97);backdrop-filter:blur(10px);
+  color:var(--t);padding:7px 12px;border-radius:8px;
+  font-size:11px;font-weight:500;letter-spacing:.2px;
+  white-space:nowrap;max-width:260px;line-height:1.45;
+  border:1px solid var(--bd2);box-shadow:0 6px 24px rgba(0,0,0,0.4)}
+[data-tip][data-tip-wide]::before{white-space:normal;width:240px}
+[data-tip]::after{
+  content:'';
+  bottom:calc(100% + 4px);left:50%;transform:translateX(-50%) translateY(4px);
+  border:5px solid transparent;border-top-color:rgba(12,12,24,0.97)}
+[data-tip]:hover::before,[data-tip]:hover::after{
+  opacity:1;transform:translateX(-50%) translateY(0)}
+[data-tip-pos="right"]::before{bottom:50%;left:calc(100% + 10px);transform:translateY(50%) translateX(4px)}
+[data-tip-pos="right"]::after{bottom:50%;left:calc(100% + 4px);transform:translateY(50%) translateX(4px);
+  border-top-color:transparent;border-right-color:rgba(12,12,24,0.97)}
+[data-tip-pos="right"]:hover::before{transform:translateY(50%) translateX(0)}
+[data-tip-pos="right"]:hover::after{transform:translateY(50%) translateX(0)}
+[data-tip-pos="left"]::before{bottom:50%;right:calc(100% + 10px);left:auto;transform:translateY(50%) translateX(-4px)}
+[data-tip-pos="left"]::after{bottom:50%;right:calc(100% + 4px);left:auto;transform:translateY(50%) translateX(-4px);
+  border-top-color:transparent;border-left-color:rgba(12,12,24,0.97)}
+[data-tip-pos="left"]:hover::before{transform:translateY(50%) translateX(0)}
+[data-tip-pos="left"]:hover::after{transform:translateY(50%) translateX(0)}
+
 /* ── BATCH TABLE ─────────────────────────────────────── */
 .bt-row{display:flex;align-items:center;gap:8px;padding:8px 12px;
   background:rgba(255,255,255,0.03);border:1px solid var(--bd);
@@ -1325,44 +1416,50 @@ canvas#wv{width:100%;height:64px;border-radius:10px;background:rgba(255,255,255,
     <span class="logo-ver">v5.0</span>
   </div>
   <div class="hspacer"></div>
-  <div class="hbadge live" id="b-eng">carregando engines...</div>
-  <div class="hbadge" id="b-gpu">__GPU__</div>
+  <div class="hbadge live" id="b-eng" data-tip="Engines carregados e prontos para gerar áudio">carregando engines...</div>
+  <div class="hbadge" id="b-gpu" data-tip="GPU detectada · CUDA acelera Chatterbox/F5-TTS/XTTS">__GPU__</div>
+  <button id="theme-btn" class="theme-btn" data-tip="Alternar tema claro/escuro (Ctrl+Shift+T)" data-tip-pos="left" onclick="toggleTheme()" aria-label="Alternar tema">
+    <svg id="theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4"></circle>
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+    </svg>
+  </button>
 </header>
 
 <div class="app">
 <!-- SIDEBAR -->
 <nav class="sidebar">
   <div class="nav-sec">Gerar</div>
-  <div class="nav-item active" data-page="studio">
+  <div class="nav-item active" data-page="studio" data-tip="Geração principal · 5 engines · Ctrl+Enter para gerar" data-tip-pos="right">
     <span class="ni">⚡</span>Studio
   </div>
-  <div class="nav-item" data-page="clone">
+  <div class="nav-item" data-page="clone" data-tip="Clonagem dedicada · F5-TTS ou Chatterbox · zero-shot" data-tip-pos="right">
     <span class="ni">🔬</span>Clonar Voz
   </div>
-  <div class="nav-item" data-page="batch">
+  <div class="nav-item" data-page="batch" data-tip="Geração em massa · um texto por linha · ilimitado" data-tip-pos="right">
     <span class="ni">🚀</span>Batch
   </div>
-  <div class="nav-item" data-page="podcast">
+  <div class="nav-item" data-page="podcast" data-tip="Script multi-voz · narração alternada com vozes diferentes" data-tip-pos="right">
     <span class="ni">🎙</span>Podcast
   </div>
   <div class="nav-sec">Gerenciar</div>
-  <div class="nav-item" data-page="vbank">
+  <div class="nav-item" data-page="vbank" data-tip="Salva configurações de voz reutilizáveis · perfis perfeitos" data-tip-pos="right">
     <span class="ni">🗄️</span>Banco de Vozes
   </div>
-  <div class="nav-item" data-page="history">
+  <div class="nav-item" data-page="history" data-tip="Todos os áudios gerados · reaproveite qualquer um" data-tip-pos="right">
     <span class="ni">📋</span>Histórico
   </div>
-  <div class="nav-item" data-page="projects">
+  <div class="nav-item" data-page="projects" data-tip="Salva estado completo do estúdio · retoma onde parou" data-tip-pos="right">
     <span class="ni">📁</span>Projetos
   </div>
-  <div class="nav-item" data-page="pron">
+  <div class="nav-item" data-page="pron" data-tip="Dicionário fonético · corrige pronúncia de palavras técnicas" data-tip-pos="right">
     <span class="ni">📖</span>Pronúncia
   </div>
   <div class="nav-sec">Análise</div>
-  <div class="nav-item" data-page="stats">
+  <div class="nav-item" data-page="stats" data-tip="Métricas de uso e economia vs ElevenLabs" data-tip-pos="right">
     <span class="ni">📊</span>Analytics
   </div>
-  <div class="nav-item" data-page="api">
+  <div class="nav-item" data-page="api" data-tip="REST API reference · integrar com qualquer sistema" data-tip-pos="right">
     <span class="ni">🔌</span>API Docs
   </div>
   <div class="nav-bottom">
@@ -1386,6 +1483,7 @@ canvas#wv{width:100%;height:64px;border-radius:10px;background:rgba(255,255,255,
         <div class="ct">Engine de Voz</div>
         <div class="eng-grid">
           <div class="eng-tile active-cha eng-flag" data-eng="chatterbox" onclick="setEng(this,'chatterbox')"
+            data-tip="Resemble AI · SOTA cloning · Vence ElevenLabs em testes cegos · Controle emocional único · MIT" data-tip-wide
             style="grid-column:1/-1;background:linear-gradient(135deg,rgba(74,222,128,0.12),rgba(34,211,238,0.08));border-color:rgba(74,222,128,0.45);box-shadow:0 0 24px rgba(74,222,128,0.18)">
             <div class="eng-hd">
               <div class="eng-dot" style="background:var(--cha)"></div>
@@ -1394,19 +1492,23 @@ canvas#wv{width:100%;height:64px;border-radius:10px;background:rgba(255,255,255,
             </div>
             <div class="eng-sub">Resemble AI · SOTA cloning · Controle emocional · TTS Arena #1</div>
           </div>
-          <div class="eng-tile" data-eng="kokoro" onclick="setEng(this,'kokoro')">
+          <div class="eng-tile" data-eng="kokoro" onclick="setEng(this,'kokoro')"
+            data-tip="82M params · Apache 2.0 · Mais rápido · 19 vozes nativas PT/EN/ES/FR" data-tip-wide>
             <div class="eng-hd"><div class="eng-dot" style="background:var(--kok)"></div>Kokoro</div>
             <div class="eng-sub">Rápido · PT-BR · Local</div>
           </div>
-          <div class="eng-tile" data-eng="xtts" onclick="setEng(this,'xtts')">
+          <div class="eng-tile" data-eng="xtts" onclick="setEng(this,'xtts')"
+            data-tip="Coqui XTTS v2 · 17 idiomas · Clonagem zero-shot com 6s de áudio · 12 speakers prontos" data-tip-wide>
             <div class="eng-hd"><div class="eng-dot" style="background:#f472b6"></div>XTTS v2</div>
             <div class="eng-sub">17 idiomas · Coqui</div>
           </div>
-          <div class="eng-tile" data-eng="f5" onclick="setEng(this,'f5')">
+          <div class="eng-tile" data-eng="f5" onclick="setEng(this,'f5')"
+            data-tip="F5-TTS · Flow matching · Clonagem zero-shot muito rápida · Recomendado p/ inglês" data-tip-wide>
             <div class="eng-hd"><div class="eng-dot" style="background:var(--f5c)"></div>F5-TTS</div>
             <div class="eng-sub">Zero-shot rápido</div>
           </div>
-          <div class="eng-tile" data-eng="edge" onclick="setEng(this,'edge')">
+          <div class="eng-tile" data-eng="edge" onclick="setEng(this,'edge')"
+            data-tip="Microsoft Edge TTS · 322 vozes neurais · Sem GPU · Requer internet" data-tip-wide>
             <div class="eng-hd"><div class="eng-dot" style="background:var(--edg)"></div>Edge TTS</div>
             <div class="eng-sub">322 vozes · Offline</div>
           </div>
@@ -1503,14 +1605,14 @@ canvas#wv{width:100%;height:64px;border-radius:10px;background:rgba(255,255,255,
 
       <!-- FX CARD -->
       <div class="card">
-        <div class="ct">Processamento de Áudio</div>
-        <label>Pitch (semitons)</label>
+        <div class="ct" data-tip="Cadeia de pós-processamento profissional · aplicada após síntese">Processamento de Áudio</div>
+        <label data-tip="-6 a +6 semitons · muda a altura sem alterar duração (librosa pitch_shift)">Pitch (semitons)</label>
         <div class="srow">
           <input type="range" id="g-pitch" min="-6" max="6" step="0.5" value="0"
             oninput="document.getElementById('g-pv').textContent=this.value">
           <span class="sv" id="g-pv">0</span>
         </div>
-        <label>Preset de Qualidade</label>
+        <label data-tip="Profissional = normalize+trim+compress+LUFS+Air EQ · Broadcast = tudo+48kHz" data-tip-wide>Preset de Qualidade</label>
         <select id="g-preset" onchange="applyPreset(this.value)"
           style="border-color:rgba(244,114,182,0.4);color:var(--t)">
           <option value="">Manual</option>
@@ -1521,21 +1623,21 @@ canvas#wv{width:100%;height:64px;border-radius:10px;background:rgba(255,255,255,
           <option value="Cinema">🎬 Cinema</option>
           <option value="Podcast">🎙 Podcast</option>
         </select>
-        <label>EQ Preset</label>
+        <label data-tip="Equalização 3-band · Cinema=graves fortes · Podcast=médio claro · Telefone=radio">EQ Preset</label>
         <select id="g-eq"></select>
         <div class="tog-grid" style="margin-top:12px">
-          <div class="tog" onclick="tog(this,'normalize')"><div class="tdot"></div>Normalizar</div>
-          <div class="tog" onclick="tog(this,'trim')"><div class="tdot"></div>Cortar Silêncio</div>
-          <div class="tog" onclick="tog(this,'reverb')"><div class="tdot"></div>Reverb</div>
-          <div class="tog" onclick="tog(this,'echo')"><div class="tdot"></div>Echo</div>
-          <div class="tog" onclick="tog(this,'denoise')"><div class="tdot"></div>Denoise</div>
-          <div class="tog" onclick="tog(this,'compress')"><div class="tdot"></div>Compressão</div>
-          <div class="tog" onclick="tog(this,'fade')"><div class="tdot"></div>Fade In/Out</div>
-          <div class="tog" onclick="tog(this,'padding')"><div class="tdot"></div>Padding</div>
+          <div class="tog" onclick="tog(this,'normalize')" data-tip="Leva o volume ao pico -3dB · evita áudio baixo ou saturado"><div class="tdot"></div>Normalizar</div>
+          <div class="tog" onclick="tog(this,'trim')" data-tip="Remove silêncio no início e no fim do áudio automaticamente"><div class="tdot"></div>Cortar Silêncio</div>
+          <div class="tog" onclick="tog(this,'reverb')" data-tip="Reverb suave · simula ambiência de sala/estúdio"><div class="tdot"></div>Reverb</div>
+          <div class="tog" onclick="tog(this,'echo')" data-tip="Delay de 300ms com decay 40% · efeito eco"><div class="tdot"></div>Echo</div>
+          <div class="tog" onclick="tog(this,'denoise')" data-tip="Filtro passa-banda 80-8000 Hz · remove ruídos extremos"><div class="tdot"></div>Denoise</div>
+          <div class="tog" onclick="tog(this,'compress')" data-tip="Compressor soft knee · suaviza picos · voz mais pro"><div class="tdot"></div>Compressão</div>
+          <div class="tog" onclick="tog(this,'fade')" data-tip="Fade-in 100ms e fade-out 200ms · transições suaves"><div class="tdot"></div>Fade In/Out</div>
+          <div class="tog" onclick="tog(this,'padding')" data-tip="Adiciona 300ms de silêncio no início e fim"><div class="tdot"></div>Padding</div>
         </div>
         <div style="margin-top:12px" class="tog-grid">
-          <div class="tog" onclick="tog(this,'export_mp3')"><div class="tdot"></div>Exportar MP3</div>
-          <div class="tog" onclick="tog(this,'generate_srt')"><div class="tdot"></div>Legendas SRT</div>
+          <div class="tog" onclick="tog(this,'export_mp3')" data-tip="Salva cópia em MP3 192kbps além do WAV"><div class="tdot"></div>Exportar MP3</div>
+          <div class="tog" onclick="tog(this,'generate_srt')" data-tip="Gera arquivo de legendas SRT com timestamps estimados"><div class="tdot"></div>Legendas SRT</div>
         </div>
       </div>
     </div>
@@ -1550,7 +1652,7 @@ canvas#wv{width:100%;height:64px;border-radius:10px;background:rgba(255,255,255,
           <span id="g-words"></span>
           <span><span id="g-cnt" style="color:var(--ind)">0</span> chars</span>
         </div>
-        <button class="gen-btn" id="g-btn" onclick="doGen()">⚡ GERAR ÁUDIO</button>
+        <button class="gen-btn" id="g-btn" onclick="doGen()" data-tip="Atalho: Ctrl+Enter · gera áudio com o engine selecionado">⚡ GERAR ÁUDIO</button>
       </div>
 
       <div id="g-status" class="status"></div>
@@ -1563,11 +1665,11 @@ canvas#wv{width:100%;height:64px;border-radius:10px;background:rgba(255,255,255,
         </div>
         <div class="ameta" id="g-ameta"></div>
         <div class="brow">
-          <a id="g-dl" class="btn-sm" download>💾 WAV</a>
-          <a id="g-dl-mp3" class="btn-sm" style="display:none" download>🎵 MP3</a>
-          <a id="g-dl-srt" class="btn-sm" style="display:none" download>📄 SRT</a>
-          <button class="btn-sm primary" onclick="saveToBank()">🗄️ Salvar Voz</button>
-          <button class="btn-sm" onclick="showCost()">💰 vs ElevenLabs</button>
+          <a id="g-dl" class="btn-sm" download data-tip="Baixar áudio em WAV (qualidade máxima)">💾 WAV</a>
+          <a id="g-dl-mp3" class="btn-sm" style="display:none" download data-tip="Baixar MP3 192kbps (arquivo menor)">🎵 MP3</a>
+          <a id="g-dl-srt" class="btn-sm" style="display:none" download data-tip="Baixar legendas SRT com timestamps">📄 SRT</a>
+          <button class="btn-sm primary" onclick="saveToBank()" data-tip="Guardar esta configuração no Banco de Vozes">🗄️ Salvar Voz</button>
+          <button class="btn-sm" onclick="showCost()" data-tip="Mostra quanto o ElevenLabs cobraria por este áudio">💰 vs ElevenLabs</button>
         </div>
         <div id="g-cost" class="cost-banner"></div>
       </div>
@@ -1787,6 +1889,34 @@ let toggs  = {};
 let lastRes = null;
 let wvRaf = null;
 let wvCtx = null;
+
+// ── THEME SWITCHER ────────────────────────────────────
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('qwn3_theme', theme);
+  const icon = document.getElementById('theme-icon');
+  if (!icon) return;
+  if (theme === 'light') {
+    // Moon icon (click to go dark)
+    icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+  } else {
+    // Sun icon (click to go light)
+    icon.innerHTML = '<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>';
+  }
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+  if (typeof toast === 'function') toast('Tema: ' + (next === 'dark' ? 'Escuro' : 'Claro'), next === 'dark' ? '🌙' : '☀️');
+}
+
+// Apply saved theme immediately (before window.onload to avoid flash)
+(function(){
+  const saved = localStorage.getItem('qwn3_theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+})();
 
 // ── NAVIGATION ────────────────────────────────────────
 document.querySelectorAll('.nav-item').forEach(el => {
@@ -2454,6 +2584,11 @@ document.addEventListener('keydown', e => {
     e.preventDefault();
     if (document.getElementById('page-studio').classList.contains('active')) doGen();
   }
+  // Ctrl+Shift+T → toggle theme
+  if ((e.ctrlKey||e.metaKey) && e.shiftKey && (e.key==='T' || e.key==='t')) {
+    e.preventDefault();
+    toggleTheme();
+  }
 });
 
 // ── INIT ──────────────────────────────────────────────
@@ -2463,6 +2598,8 @@ window.onload = () => {
   buildEQ();
   buildXTTS();
   updateExagLabel(0.5);
+  // Initialize theme icon to match saved preference
+  applyTheme(localStorage.getItem('qwn3_theme') || 'dark');
 
   // restore draft
   const draft = localStorage.getItem('qwn3_draft');
