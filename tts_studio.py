@@ -101,6 +101,23 @@ def _load_chatterbox():
             _engines["chatterbox"] = ChatterboxTTS.from_pretrained(device=DEVICE)
     return _engines["chatterbox"]
 
+def _load_chatterbox_mtl():
+    with _engine_lock:
+        if "chatterbox_mtl" not in _engines:
+            from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+            _engines["chatterbox_mtl"] = ChatterboxMultilingualTTS.from_pretrained(device=DEVICE)
+    return _engines["chatterbox_mtl"]
+
+# Supported languages for Chatterbox Multilingual (23)
+CHATTERBOX_LANGS = {
+    "pt": "Português", "en": "English", "es": "Español", "fr": "Français",
+    "de": "Deutsch",   "it": "Italiano", "nl": "Dutch",  "ru": "Русский",
+    "ja": "日本語",    "ko": "한국어",   "zh": "中文",    "ar": "العربية",
+    "hi": "हिन्दी",     "tr": "Türkçe",   "pl": "Polski",  "sv": "Svenska",
+    "no": "Norsk",     "da": "Dansk",    "fi": "Suomi",   "el": "Ελληνικά",
+    "he": "עברית",     "ms": "Bahasa",   "sw": "Kiswahili",
+}
+
 def _load_xtts():
     with _engine_lock:
         if "xtts" not in _engines:
@@ -582,16 +599,30 @@ def gen_f5(text: str, ref_audio: str, ref_text: str = "", opts: dict = None) -> 
     w, sr = fx_pipeline(w, sr if isinstance(sr, int) else 24000, opts)
     return w, sr if isinstance(sr, int) else 24000
 
-# ── Engine: Chatterbox ────────────────────────────────────────────────────────
-def gen_chatterbox(text: str, ref_audio: str = None, exaggeration: float = 0.5, opts: dict = None) -> tuple:
+# ── Engine: Chatterbox (mono + multilingual) ─────────────────────────────────
+def gen_chatterbox(text: str, ref_audio: str = None, exaggeration: float = 0.5,
+                    opts: dict = None, language: str = "pt") -> tuple:
     opts  = opts or {}
-    model = _load_chatterbox()
     text  = fx_apply_pron(fx_clean_text(text))
     sr    = 24000
-    if ref_audio:
-        wav = model.generate(text, audio_prompt_path=ref_audio, exaggeration=exaggeration)
+
+    lang = (language or "pt").lower()[:2]
+    use_mtl = lang != "en"  # English uses the faster mono model; other langs need MTL
+
+    if use_mtl:
+        model = _load_chatterbox_mtl()
+        if ref_audio:
+            wav = model.generate(text, language_id=lang,
+                                 audio_prompt_path=ref_audio, exaggeration=exaggeration)
+        else:
+            wav = model.generate(text, language_id=lang, exaggeration=exaggeration)
     else:
-        wav = model.generate(text, exaggeration=exaggeration)
+        model = _load_chatterbox()
+        if ref_audio:
+            wav = model.generate(text, audio_prompt_path=ref_audio, exaggeration=exaggeration)
+        else:
+            wav = model.generate(text, exaggeration=exaggeration)
+
     w = np.array(wav.squeeze().cpu(), dtype=np.float32)
     w, sr = fx_pipeline(w, model.sr if hasattr(model, "sr") else sr, opts)
     return w, sr
@@ -661,8 +692,9 @@ def generate(engine: str, text: str, params: dict, opts: dict) -> dict:
     elif engine == "chatterbox":
         ref  = params.get("ref_audio")
         exag = float(params.get("exaggeration", 0.5))
-        w, sr = gen_chatterbox(text, ref, exag, opts)
-        used_voice = "chatterbox"
+        lang = params.get("language", "pt")
+        w, sr = gen_chatterbox(text, ref, exag, opts, lang)
+        used_voice = f"chatterbox-{lang}"
 
     elif engine == "edge":
         voice = params.get("voice", "pt-BR-FranciscaNeural")
@@ -772,13 +804,15 @@ async def api_generate(request: Request):
 @app.post("/api/generate/clone")
 async def api_clone(text: str = Form(...), engine: str = Form("f5"),
                     ref_text: str = Form(""), exaggeration: float = Form(0.5),
+                    language: str = Form("pt"),
                     audio_ref: UploadFile = File(...)):
     tmp = None
     try:
         data = await audio_ref.read()
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             f.write(data); tmp = f.name
-        params = {"ref_audio": tmp, "ref_text": ref_text, "exaggeration": exaggeration}
+        params = {"ref_audio": tmp, "ref_text": ref_text,
+                  "exaggeration": exaggeration, "language": language}
         return generate(engine, text, params, {})
     except Exception as e:
         import traceback; traceback.print_exc()
@@ -964,6 +998,9 @@ async def xtts_speakers(): return XTTS_SPEAKERS
 
 @app.get("/api/xtts/langs")
 async def xtts_langs(): return XTTS_LANGS
+
+@app.get("/api/chatterbox/langs")
+async def chatterbox_langs(): return CHATTERBOX_LANGS
 
 @app.post("/api/transcribe")
 async def api_transcribe(audio: UploadFile = File(...)):
@@ -1558,10 +1595,36 @@ canvas#wv{width:100%;height:64px;border-radius:10px;background:rgba(255,255,255,
         <!-- Chatterbox params — DEFAULT (best cloning) -->
         <div id="ep-chatterbox" class="ep act">
           <div style="font-size:11px;color:var(--em);margin-bottom:10px;padding:10px;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);border-radius:9px;line-height:1.5">
-            <b>⭐ Resemble AI Chatterbox</b> — Modelo #1 no TTS Arena (vence ElevenLabs em testes cegos).
-            MIT · Watermark PerTh · Controle emocional único.
+            <b>⭐ Resemble AI Chatterbox Multilingual</b> — SOTA TTS Arena · 23 idiomas ·
+            Controle emocional único · MIT · Watermark PerTh
           </div>
-          <div class="upzone" id="cb-uz">
+          <label data-tip="23 idiomas suportados nativamente pelo modelo multilingual">🌐 Idioma</label>
+          <select id="cb-lang">
+            <option value="pt" selected>🇧🇷 Português</option>
+            <option value="en">🇺🇸 English</option>
+            <option value="es">🇪🇸 Español</option>
+            <option value="fr">🇫🇷 Français</option>
+            <option value="de">🇩🇪 Deutsch</option>
+            <option value="it">🇮🇹 Italiano</option>
+            <option value="nl">🇳🇱 Nederlands</option>
+            <option value="ru">🇷🇺 Русский</option>
+            <option value="ja">🇯🇵 日本語</option>
+            <option value="ko">🇰🇷 한국어</option>
+            <option value="zh">🇨🇳 中文</option>
+            <option value="ar">🇸🇦 العربية</option>
+            <option value="hi">🇮🇳 हिन्दी</option>
+            <option value="tr">🇹🇷 Türkçe</option>
+            <option value="pl">🇵🇱 Polski</option>
+            <option value="sv">🇸🇪 Svenska</option>
+            <option value="no">🇳🇴 Norsk</option>
+            <option value="da">🇩🇰 Dansk</option>
+            <option value="fi">🇫🇮 Suomi</option>
+            <option value="el">🇬🇷 Ελληνικά</option>
+            <option value="he">🇮🇱 עברית</option>
+            <option value="ms">🇲🇾 Bahasa</option>
+            <option value="sw">🇰🇪 Kiswahili</option>
+          </select>
+          <div class="upzone" id="cb-uz" style="margin-top:10px">
             <input type="file" id="cb-ref" accept="audio/*" onchange="onUp(this,'cb-uz','cb-lbl')">
             <span class="up-ico">🎭</span>
             <p id="cb-lbl">Referência de voz (opcional · 5–10s basta)</p>
@@ -2181,11 +2244,13 @@ async function doGen() {
     return doCloneFrom('f5', txt, f, document.getElementById('f5-rt').value);
   } else if (curEng==='chatterbox') {
     const f = document.getElementById('cb-ref').files[0];
-    // Com referência → clonagem; sem referência → voz padrão via /api/generate
+    const lang = document.getElementById('cb-lang').value || 'pt';
+    const exag = parseFloat(document.getElementById('cb-ex').value);
+    // Com referência → clonagem; sem referência → voz padrão multilingual via /api/generate
     if (f) {
-      return doCloneFrom('chatterbox', txt, f, '', parseFloat(document.getElementById('cb-ex').value));
+      return doCloneFrom('chatterbox', txt, f, '', exag, lang);
     }
-    params = { exaggeration: parseFloat(document.getElementById('cb-ex').value) };
+    params = { exaggeration: exag, language: lang };
   } else if (curEng==='xtts') {
     const f = document.getElementById('xt-ref').files[0];
     if (f) {
@@ -2288,12 +2353,13 @@ async function doCloneXTTS(text, file, language) {
   document.getElementById('g-btn').disabled = false;
 }
 
-async function doCloneFrom(eng, text, file, rtext, exag=0.5) {
+async function doCloneFrom(eng, text, file, rtext, exag=0.5, language='pt') {
   const fd = new FormData();
   fd.append('text', text);
   fd.append('engine', eng);
   fd.append('ref_text', rtext||'');
   fd.append('exaggeration', exag);
+  fd.append('language', language);
   if (file) fd.append('audio_ref', file);
 
   const pc = document.getElementById('g-player');
