@@ -65,6 +65,11 @@ try:
 except ImportError:
     WHISPER_OK = False
 
+try:
+    import TTS as _tts_mod; XTTS_OK = True
+except ImportError:
+    XTTS_OK = False
+
 # ── Engine registry ───────────────────────────────────────────────────────────
 _engines     = {}
 _engine_lock = threading.Lock()
@@ -741,6 +746,7 @@ async def info():
             "pyloudnorm": PYLN_OK,
             "resampy": RESAMPY_OK,
             "noisereduce": NR_OK,
+            "xtts": XTTS_OK,
             "neural_enhance": "resemble" in _engines,
             "deep_denoise": "df" in _engines,
         },
@@ -2642,6 +2648,18 @@ async function pollInfo() {
       el.className = 'hbadge live';
     } else {
       el.textContent = 'carregando engines...';
+    }
+    // Disable XTTS tile if TTS package missing
+    const xttsTile = document.querySelector('[data-eng="xtts"]');
+    if (xttsTile && i.capabilities && i.capabilities.xtts === false) {
+      xttsTile.style.opacity = '0.45';
+      xttsTile.style.cursor  = 'not-allowed';
+      xttsTile.setAttribute('data-tip', 'XTTS v2 não instalado · pip install TTS (incompatível com Python 3.12) · use Chatterbox/F5 para clonagem');
+      xttsTile.setAttribute('data-tip-wide', '');
+      xttsTile.onclick = (e) => {
+        e.preventDefault();
+        toast('XTTS v2 não disponível — use Chatterbox para clonagem', '✕', 4000);
+      };
     }
   } catch {}
 }
