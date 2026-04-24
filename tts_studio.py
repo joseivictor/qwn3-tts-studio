@@ -1516,7 +1516,16 @@ canvas#wv{width:100%;height:64px;border-radius:10px;background:rgba(255,255,255,
 
         <!-- Kokoro params -->
         <div id="ep-kokoro" class="ep">
-          <div class="ct" style="margin-bottom:10px">Voz Kokoro</div>
+          <label data-tip="Filtra vozes por idioma · Kokoro tem vozes nativas em 5 idiomas">🌐 Idioma</label>
+          <select id="k-lang" onchange="filterKokoroByLang(this.value)">
+            <option value="all">Todos os idiomas</option>
+            <option value="p">🇧🇷 Português BR</option>
+            <option value="a">🇺🇸 English (US)</option>
+            <option value="b">🇬🇧 English (UK)</option>
+            <option value="e">🇪🇸 Español</option>
+            <option value="f">🇫🇷 Français</option>
+          </select>
+          <div class="ct" style="margin:14px 0 10px">Voz Kokoro</div>
           <div class="vg" id="kvg"></div>
           <label>Velocidade</label>
           <div class="srow">
@@ -1564,6 +1573,17 @@ canvas#wv{width:100%;height:64px;border-radius:10px;background:rgba(255,255,255,
 
         <!-- Edge params -->
         <div id="ep-edge" class="ep">
+          <label data-tip="Filtra as 322 vozes por idioma">🌐 Idioma</label>
+          <select id="edge-lang" onchange="filterEdgeByLang(this.value)">
+            <option value="all">Todos</option>
+            <option value="pt" selected>🇧🇷 Português</option>
+            <option value="en">🇺🇸 English</option>
+            <option value="es">🇪🇸 Español</option>
+            <option value="fr">🇫🇷 Français</option>
+            <option value="de">🇩🇪 Deutsch</option>
+            <option value="ja">🇯🇵 日本語</option>
+            <option value="zh">🇨🇳 中文</option>
+          </select>
           <label>Voz Microsoft</label>
           <select id="edge-v"></select>
           <label>Velocidade</label>
@@ -1948,10 +1968,38 @@ function setEng(el, name) {
 
 // ── VOICE GRID ────────────────────────────────────────
 function buildKVG() {
+  // Default to Portuguese voices (user is Brazilian)
+  const langSel = document.getElementById('k-lang');
+  if (langSel) langSel.value = 'p';
+  // Set default voice to PT-BR
+  curKV = 'pf_dora';
+  filterKokoroByLang('p');
+}
+
+// ── EDGE SELECTS ──────────────────────────────────────
+function buildEdge() {
+  // Default Portuguese filter
+  filterEdgeByLang('pt');
+  const rs = document.getElementById('edge-r');
+  ER.forEach(r => { const o=document.createElement('option'); o.value=r; o.textContent=r; rs.appendChild(o); });
+  rs.value = '+0%';
+  const ps = document.getElementById('edge-p');
+  EP.forEach(p => { const o=document.createElement('option'); o.value=p; o.textContent=p; ps.appendChild(o); });
+  ps.value = '+0Hz';
+}
+
+// ── LANGUAGE FILTERS ──────────────────────────────────
+function filterKokoroByLang(lang) {
+  // Rebuild Kokoro voice grid with filter
   const vg = document.getElementById('kvg');
+  vg.innerHTML = '';
+  let firstVoice = null;
   Object.entries(KV).forEach(([k, v]) => {
+    if (lang !== 'all' && v.lang !== lang) return;
+    if (!firstVoice) firstVoice = k;
     const d = document.createElement('div');
     d.className = 'vc' + (k===curKV?' sel':'');
+    d.setAttribute('data-tip', v.desc);
     d.innerHTML = `<div class="va ${v.gender}">${v.label[0]}</div>
       <div class="vn">${v.label}</div>
       <div class="vd">${v.desc.substring(0,22)}</div>`;
@@ -1961,22 +2009,29 @@ function buildKVG() {
     };
     vg.appendChild(d);
   });
+  // If current voice not in filtered list, select first available
+  if (firstVoice && !vg.querySelector('.vc.sel')) {
+    curKV = firstVoice;
+    const first = vg.querySelector('.vc');
+    if (first) first.classList.add('sel');
+  }
+  if (vg.children.length === 0) {
+    vg.innerHTML = '<div style="grid-column:1/-1;color:var(--t3);font-size:11px;padding:12px;text-align:center">Nenhuma voz para este idioma</div>';
+  }
 }
 
-// ── EDGE SELECTS ──────────────────────────────────────
-function buildEdge() {
-  const vs = document.getElementById('edge-v');
-  Object.entries(EV).forEach(([k,v]) => {
+function filterEdgeByLang(lang) {
+  const sel = document.getElementById('edge-v');
+  sel.innerHTML = '';
+  Object.entries(EV).forEach(([k, v]) => {
+    if (lang !== 'all' && v.lang !== lang) return;
     const o = document.createElement('option');
-    o.value = k; o.textContent = `${v.label} (${v.lang})`;
-    vs.appendChild(o);
+    o.value = k; o.textContent = `${v.label} (${v.lang}) — ${v.desc}`;
+    sel.appendChild(o);
   });
-  const rs = document.getElementById('edge-r');
-  ER.forEach(r => { const o=document.createElement('option'); o.value=r; o.textContent=r; rs.appendChild(o); });
-  rs.value = '+0%';
-  const ps = document.getElementById('edge-p');
-  EP.forEach(p => { const o=document.createElement('option'); o.value=p; o.textContent=p; ps.appendChild(o); });
-  ps.value = '+0Hz';
+  if (sel.children.length === 0) {
+    const o = document.createElement('option'); o.textContent='(sem vozes)'; sel.appendChild(o);
+  }
 }
 
 // ── XTTS SPEAKERS ─────────────────────────────────────
@@ -2116,11 +2171,15 @@ async function doGen() {
     };
   } else if (curEng==='f5') {
     const f = document.getElementById('f5-ref').files[0];
-    if (!f) { btn.disabled=false; toast('Selecione um áudio de referência','✕'); clrStatus('g-status'); return; }
+    if (!f) { btn.disabled=false; toast('F5-TTS precisa de áudio de referência','✕'); clrStatus('g-status'); return; }
     return doCloneFrom('f5', txt, f, document.getElementById('f5-rt').value);
   } else if (curEng==='chatterbox') {
     const f = document.getElementById('cb-ref').files[0];
-    return doCloneFrom('chatterbox', txt, f, '', parseFloat(document.getElementById('cb-ex').value));
+    // Com referência → clonagem; sem referência → voz padrão via /api/generate
+    if (f) {
+      return doCloneFrom('chatterbox', txt, f, '', parseFloat(document.getElementById('cb-ex').value));
+    }
+    params = { exaggeration: parseFloat(document.getElementById('cb-ex').value) };
   } else if (curEng==='xtts') {
     const f = document.getElementById('xt-ref').files[0];
     if (f) {
@@ -2255,6 +2314,15 @@ function renderResult(d) {
   const b64 = 'data:audio/wav;base64,' + d.audio_b64;
   const aud = document.getElementById('g-audio');
   aud.src = b64;
+  aud.load();
+  // Try autoplay — modern browsers allow after user interaction (click → generate counts)
+  const playPromise = aud.play();
+  if (playPromise !== undefined) {
+    playPromise.catch(err => {
+      // Autoplay blocked — user must click play manually
+      toast('Clique ▶ para ouvir (autoplay bloqueado)', '🔊', 4000);
+    });
+  }
 
   // waveform
   animWV(d.waveform || [], false);
