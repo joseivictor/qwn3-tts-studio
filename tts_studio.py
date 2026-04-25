@@ -164,9 +164,9 @@ XTTS_SPEAKERS = [
 ]
 XTTS_LANGS = ["pt","en","es","fr","de","it","pl","tr","ru","nl","cs","ar","zh-cn","ko","ja","hi"]
 
-# Preload Chatterbox (best cloning) + Kokoro (fastest) in background
-threading.Thread(target=_load_chatterbox, daemon=True).start()
-threading.Thread(target=_load_kokoro,     daemon=True).start()
+# Preload Kokoro (fastest local PT-BR) on startup.
+# Edge TTS doesn't need preload (uses Microsoft cloud). Chatterbox loads on first use.
+threading.Thread(target=_load_kokoro, daemon=True).start()
 
 # ── Kokoro voices ─────────────────────────────────────────────────────────────
 KOKORO_VOICES = {
@@ -1525,35 +1525,35 @@ canvas#wv{width:100%;height:64px;border-radius:10px;background:rgba(255,255,255,
       <div class="card">
         <div class="ct">Engine de Voz</div>
         <div class="eng-grid">
-          <div class="eng-tile active-cha eng-flag" data-eng="chatterbox" onclick="setEng(this,'chatterbox')"
-            data-tip="Resemble AI · SOTA cloning · Vence ElevenLabs em testes cegos · Controle emocional único · MIT" data-tip-wide
-            style="grid-column:1/-1;background:linear-gradient(135deg,rgba(74,222,128,0.12),rgba(34,211,238,0.08));border-color:rgba(74,222,128,0.45);box-shadow:0 0 24px rgba(74,222,128,0.18)">
+          <div class="eng-tile active-edg eng-flag" data-eng="edge" onclick="setEng(this,'edge')"
+            data-tip="Microsoft Neural Voices · Melhor qualidade PT-BR open-source · 322 vozes · Grátis" data-tip-wide
+            style="grid-column:1/-1;background:linear-gradient(135deg,rgba(251,191,36,0.12),rgba(244,114,182,0.08));border-color:rgba(251,191,36,0.45);box-shadow:0 0 24px rgba(251,191,36,0.15)">
             <div class="eng-hd">
-              <div class="eng-dot" style="background:var(--cha)"></div>
-              <span>Chatterbox</span>
-              <span style="margin-left:auto;font-size:9px;padding:2px 8px;background:rgba(74,222,128,0.2);border:1px solid rgba(74,222,128,0.4);border-radius:20px;color:var(--em);font-weight:700;letter-spacing:0.5px">⭐ BATE ELEVENLABS</span>
+              <div class="eng-dot" style="background:var(--edg)"></div>
+              <span>Edge TTS (Microsoft Neural)</span>
+              <span style="margin-left:auto;font-size:9px;padding:2px 8px;background:rgba(251,191,36,0.2);border:1px solid rgba(251,191,36,0.4);border-radius:20px;color:var(--amb);font-weight:700;letter-spacing:0.5px">🥇 MELHOR PT-BR</span>
             </div>
-            <div class="eng-sub">Resemble AI · SOTA cloning · Controle emocional · TTS Arena #1</div>
+            <div class="eng-sub">Francisca · Antonio · Thalita · 322 vozes · Qualidade broadcast nativa</div>
           </div>
           <div class="eng-tile" data-eng="kokoro" onclick="setEng(this,'kokoro')"
-            data-tip="82M params · Apache 2.0 · Mais rápido · 19 vozes nativas PT/EN/ES/FR" data-tip-wide>
+            data-tip="82M params · Apache 2.0 · Rápido local · Vozes PT-BR Dora e Alex · Sem internet" data-tip-wide>
             <div class="eng-hd"><div class="eng-dot" style="background:var(--kok)"></div>Kokoro</div>
-            <div class="eng-sub">Rápido · PT-BR · Local</div>
+            <div class="eng-sub">⚡ Rápido · Local · PT-BR</div>
           </div>
-          <div class="eng-tile" data-eng="xtts" onclick="setEng(this,'xtts')"
-            data-tip="Coqui XTTS v2 · 17 idiomas · Clonagem zero-shot com 6s de áudio · 12 speakers prontos" data-tip-wide>
-            <div class="eng-hd"><div class="eng-dot" style="background:#f472b6"></div>XTTS v2</div>
-            <div class="eng-sub">17 idiomas · Coqui</div>
+          <div class="eng-tile" data-eng="chatterbox" onclick="setEng(this,'chatterbox')"
+            data-tip="Resemble AI · Excelente em inglês · Clonagem de voz · Controle emocional único (exaggeration)" data-tip-wide>
+            <div class="eng-hd"><div class="eng-dot" style="background:var(--cha)"></div>Chatterbox</div>
+            <div class="eng-sub">🎭 Clonagem EN · Emoção</div>
           </div>
           <div class="eng-tile" data-eng="f5" onclick="setEng(this,'f5')"
-            data-tip="F5-TTS · Flow matching · Clonagem zero-shot muito rápida · Recomendado p/ inglês" data-tip-wide>
+            data-tip="F5-TTS · Flow matching · Clonagem zero-shot muito rápida em inglês" data-tip-wide>
             <div class="eng-hd"><div class="eng-dot" style="background:var(--f5c)"></div>F5-TTS</div>
-            <div class="eng-sub">Zero-shot rápido</div>
+            <div class="eng-sub">🔬 Clone zero-shot</div>
           </div>
-          <div class="eng-tile" data-eng="edge" onclick="setEng(this,'edge')"
-            data-tip="Microsoft Edge TTS · 322 vozes neurais · Sem GPU · Requer internet" data-tip-wide>
-            <div class="eng-hd"><div class="eng-dot" style="background:var(--edg)"></div>Edge TTS</div>
-            <div class="eng-sub">322 vozes · Offline</div>
+          <div class="eng-tile" data-eng="xtts" onclick="setEng(this,'xtts')"
+            data-tip="Coqui XTTS v2 · 17 idiomas · Clonagem multilingual (requer pip install TTS)" data-tip-wide>
+            <div class="eng-hd"><div class="eng-dot" style="background:#f472b6"></div>XTTS v2</div>
+            <div class="eng-sub">17 idiomas · Coqui</div>
           </div>
         </div>
 
@@ -1592,11 +1592,12 @@ canvas#wv{width:100%;height:64px;border-radius:10px;background:rgba(255,255,255,
           <textarea id="f5-rt" rows="2" placeholder="O que o áudio diz..."></textarea>
         </div>
 
-        <!-- Chatterbox params — DEFAULT (best cloning) -->
-        <div id="ep-chatterbox" class="ep act">
+        <!-- Chatterbox params -->
+        <div id="ep-chatterbox" class="ep">
           <div style="font-size:11px;color:var(--em);margin-bottom:10px;padding:10px;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.2);border-radius:9px;line-height:1.5">
-            <b>⭐ Resemble AI Chatterbox Multilingual</b> — SOTA TTS Arena · 23 idiomas ·
-            Controle emocional único · MIT · Watermark PerTh
+            <b>🎭 Resemble AI Chatterbox</b> — Ideal para <b>inglês</b> e
+            <b>clonagem de voz</b> com áudio de referência.<br>
+            <span style="color:var(--amb)">⚠️ Para PT-BR use Edge TTS (Francisca) — qualidade superior.</span>
           </div>
           <label data-tip="23 idiomas suportados nativamente pelo modelo multilingual">🌐 Idioma</label>
           <select id="cb-lang">
@@ -1641,7 +1642,12 @@ canvas#wv{width:100%;height:64px;border-radius:10px;background:rgba(255,255,255,
         </div>
 
         <!-- Edge params -->
-        <div id="ep-edge" class="ep">
+        <div id="ep-edge" class="ep act">
+          <div style="font-size:11px;color:var(--amb);margin-bottom:10px;padding:10px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:9px;line-height:1.5">
+            <b>🥇 Microsoft Neural — Melhor PT-BR open-source</b><br>
+            Francisca / Antonio / Thalita têm qualidade de broadcast.
+            Chatterbox é ótimo pra inglês · para PT-BR, use estas.
+          </div>
           <label data-tip="Filtra as 322 vozes por idioma">🌐 Idioma</label>
           <select id="edge-lang" onchange="filterEdgeByLang(this.value)">
             <option value="all">Todos</option>
@@ -1971,7 +1977,7 @@ const ER = __ER__;
 const EP = __EP__;
 
 // ── STATE ─────────────────────────────────────────────
-let curEng = 'chatterbox';
+let curEng = 'edge';
 let curKV  = 'af_heart';
 let curEV  = 'pt-BR-FranciscaNeural';
 let toggs  = {};
